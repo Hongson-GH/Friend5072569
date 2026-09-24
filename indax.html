@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astronomy Puzzle Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Mitr:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Mitr', sans-serif;
+            background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+            user-select: none; /* Prevent text selection while dragging */
+        }
+
+        /* Starry Background Animation */
+        .stars-container {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle var(--duration) infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Screen Transitions */
+        .screen {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .screen.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* Glassmorphism Containers */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Planet Styles */
+        .planet {
+            border-radius: 50%;
+            box-shadow: inset -10px -10px 20px rgba(0,0,0,0.5), 0 0 10px rgba(255,255,255,0.2);
+            cursor: grab;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            text-shadow: 1px 1px 2px black;
+        }
+        .planet:active { cursor: grabbing; transform: scale(1.1); }
+        .planet.selected { border: 3px solid #4ade80; box-shadow: 0 0 20px #4ade80; transform: scale(1.1); }
+
+        .planet-mercury { background: linear-gradient(145deg, #a8a8a8, #5e5e5e); width: 40px; height: 40px; }
+        .planet-venus { background: linear-gradient(145deg, #e3bb76, #9c7835); width: 50px; height: 50px; }
+        .planet-earth { background: linear-gradient(145deg, #4b9ee3, #1e5a8f); width: 55px; height: 55px; }
+        .planet-mars { background: linear-gradient(145deg, #e36b4b, #943016); width: 45px; height: 45px; }
+        .planet-jupiter { background: linear-gradient(145deg, #c99c75, #7a502e); width: 80px; height: 80px; }
+        .planet-saturn { 
+            background: linear-gradient(145deg, #ebd698, #a89456); 
+            width: 70px; height: 70px; 
+            position: relative;
+        }
+        /* Saturn's Ring */
+        .planet-saturn::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(20deg) scaleY(0.3);
+            width: 120px; height: 120px;
+            border-radius: 50%;
+            border: 12px solid rgba(220, 200, 150, 0.6);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+        .planet-uranus { background: linear-gradient(145deg, #82d4e0, #408994); width: 60px; height: 60px; }
+        .planet-neptune { background: linear-gradient(145deg, #4b66e3, #1f338a); width: 60px; height: 60px; }
+
+        /* Drop Zones */
+        .drop-zone {
+            border: 2px dashed rgba(255,255,255,0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: #4ade80;
+            background-color: rgba(74, 222, 128, 0.2);
+        }
+        .drop-zone.filled {
+            border: 2px solid #4ade80;
+            border-radius: 50%; /* Reset to circle if overridden */
+        }
+        
+        .orbit-zone { width: 90px; height: 90px; }
+        
+        /* Constellation Styles */
+        .constellation-card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        .constellation-svg {
+            width: 100px;
+            height: 100px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 0 5px rgba(255,255,255,0.8));
+        }
+        .star-point { fill: #fff; stroke: none; }
+        
+        .name-tag {
+            background: rgba(255, 255, 255, 0.9);
+            color: #1b2735;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            cursor: grab;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .name-tag:active { cursor: grabbing; }
+        .name-tag.selected { background: #4ade80; color: white; transform: scale(1.05); }
+
+        .name-drop-zone {
+            width: 100%;
+            height: 40px;
+            border: 2px dashed rgba(255,255,255,0.4);
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Floating Score Animation */
+        .floating-score {
+            position: absolute;
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 1.5rem;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            z-index: 50;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        }
+
+        /* Helper for Sun */
+        .the-sun {
+            width: 120px; height: 120px;
+            background: radial-gradient(circle, #ffd000 0%, #ff7b00 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 40px #ff7b00, inset -10px -10px 20px rgba(255,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #803000; text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="stars-container" id="stars-container"></div>
+
+    <!-- Header / Score Board (Visible in Game) -->
+    <div id="game-header" class="hidden fixed top-0 w-full p-4 flex justify-between items-center z-40">
+        <div class="glass-panel px-4 py-2 rounded-full font-bold">
+            <span data-i18n="score">Score</span>: <span id="current-score" class="text-green-400">0</span>
+        </div>
+        <button id="lang-toggle-game" class="glass-panel px-4 py-2 rounded-full font-bold hover:bg-white/20 transition">
+            EN / TH
+        </button>
+    </div>
+
+    <!-- Main Application Container -->
+    <div id="app" class="w-full min-h-screen flex items-center justify-center p-4">
+
+        <!-- Screen 1: Start Screen -->
+        <div id="screen-start" class="screen active flex-col items-center max-w-lg w-full text-center">
+            <div class="glass-panel p-8 rounded-3xl w-full">
+                <div class="text-6xl mb-4">🪐</div>
+                <h1 class="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400" data-i18n="title">
+                    Astronomy Puzzle
+                </h1>
+                <p class="text-gray-300 mb-8 text-lg" data-i18n="desc">
+                    Explore the solar system and constellations in this interactive learning game.
+                </p>
+                
+                <div class="flex justify-center gap-4 mb-8">
+                    <button onclick="setLanguage('en')" id="btn-lang-en" class="px-6 py-2 rounded-full border-2 border-green-400 bg-green-400/20 font-bold transition">English</button>
+                    <button onclick="setLanguage('th')" id="btn-lang-th" class="px-6 py-2 rounded-full border-2 border-transparent bg-white/10 hover:bg-white/20 font-bold transition">ภาษาไทย</button>
+                </div>
+
+                <button onclick="startGame()" class="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold text-xl shadow-lg transform transition hover:scale-105">
+                    <span data-i18n="btnStart">Start Game</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Solar System Puzzle -->
+        <div id="screen-solar" class="screen flex-col items-center w-full max-w-6xl mt-12">
+            <h2 class="text-2xl md:text-3xl font-bold mb-2 text-center" data-i18n="solarTitle">Solar System Assembly</h2>
+            <p class="text-gray-300 mb-6 text-center" data-i18n="solarInstruction">Drag the planets into the correct orbits from the Sun.</p>
+            
+            <div class="glass-panel p-6 rounded-2xl w-full mb-8 overflow-x-auto">
+                <div class="flex items-center min-w-max gap-4 pb-4">
+                    <!-- The Sun -->
+                    <div class="the-sun" data-i18n="sun">Sun</div>
+                    
+                    <!-- Orbit Drop Zones -->
+                    <div class="flex gap-4" id="orbits-container">
+                        <!-- Generated via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Draggable Planets Pool -->
+            <div class="glass-panel p-6 rounded-2xl w-full">
+                <h3 class="text-gray-400 text-sm mb-4 uppercase tracking-wider text-center" data-i18n="planetsPool">Planets</h3>
+                <div class="flex flex-wrap justify-center gap-6 min-h-[100px]" id="planets-container">
+                    <!-- Generated via JS -->
+                </div>
+            </div>
+
+            <button id="btn-next-solar" onclick="nextToConstellations()" class="hidden mt-8 px-8 py-3 rounded-full bg-blue-500 hover:bg-blue-400 text-white font-bold text-lg shadow-lg transform transition hover:scale-105">
+                <span data-i18n="btnNext">Next Stage</span> ➔
+            </button>
+        </div>
+
+        <!-- Screen 3: Constellation Puzzle -->
+        <div id="screen-constellation" class="screen flex-col items-center w-full max-w-5xl mt-12">
+            <h2 class="text-2xl md:text-3xl font-bold mb-2 text-center" data-i18n="constTitle">Constellation Match</h2>
+            <p class="text-gray-300 mb-6 text-center" data-i18n="constInstruction">Match the names with the correct constellation shapes.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full mb-8" id="constellations-container">
+                <!-- Generated via JS -->
+            </div>
+
+            <div class="glass-panel p-6 rounded-2xl w-full">
+                <h3 class="text-gray-400 text-sm mb-4 uppercase tracking-wider text-center" data-i18n="namesPool">Names</h3>
+                <div class="flex flex-wrap justify-center gap-4 min-h-[60px]" id="names-container">
+                    <!-- Generated via JS -->
+                </div>
+            </div>
+
+            <button id="btn-finish" onclick="finishGame()" class="hidden mt-8 px-8 py-3 rounded-full bg-green-500 hover:bg-green-400 text-white font-bold text-lg shadow-lg transform transition hover:scale-105">
+                <span data-i18n="btnFinish">Finish Game</span> ★
+            </button>
+        </div>
+
+        <!-- Screen 4: Result Screen -->
+        <div id="screen-result" class="screen flex-col items-center max-w-lg w-full text-center mt-12">
+            <div class="glass-panel p-10 rounded-3xl w-full relative overflow-hidden">
+                <!-- Celebration Confetti Effect (CSS only illusion) -->
+                <div class="absolute inset-0 pointer-events-none opacity-20" style="background-image: radial-gradient(#4ade80 2px, transparent 2px); background-size: 30px 30px;"></div>
+                
+                <h2 class="text-4xl font-extrabold mb-2 text-yellow-400" data-i18n="resultTitle">Mission Complete!</h2>
+                <p class="text-xl text-gray-200 mb-8" data-i18n="resultDesc">You've mastered the cosmos.</p>
+                
+                <div class="flex flex-col gap-4 mb-8">
+                    <div class="bg-black/30 rounded-xl p-4 border border-white/10">
+                        <p class="text-gray-400 uppercase tracking-wider text-sm mb-1" data-i18n="yourScore">Your Score</p>
+                        <p class="text-5xl font-black text-green-400" id="final-score">120</p>
+                    </div>
+                    <div class="bg-black/30 rounded-xl p-4 border border-white/10">
+                        <p class="text-gray-400 uppercase tracking-wider text-sm mb-1" data-i18n="highScore">High Score</p>
+                        <p class="text-3xl font-bold text-blue-400" id="high-score">0</p>
+                    </div>
+                </div>
+
+                <button onclick="resetGame()" class="w-full py-4 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xl shadow-lg transform transition border border-white/30">
+                    <span data-i18n="btnRestart">Play Again</span> ↻
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- State Management & Data ---
+        let currentLang = 'en';
+        let score = 0;
+        let selectedElement = null; // For touch-based selection fallback
+        
+        // Dictionary for Translations
+        const dict = {
+            en: {
+                title: "Astronomy Puzzle",
+                desc: "Explore the solar system and constellations in this interactive learning game.",
+                btnStart: "Start Game",
+                score: "Score",
+                solarTitle: "Solar System Assembly",
+                solarInstruction: "Drag and drop (or tap to select & place) planets into the correct orbits.",
+                sun: "Sun",
+                planetsPool: "Planets (Drag or Tap)",
+                btnNext: "Next Stage",
+                constTitle: "Constellation Match",
+                constInstruction: "Match the names with the correct constellation shapes.",
+                namesPool: "Names (Drag or Tap)",
+                btnFinish: "Finish Game",
+                resultTitle: "Mission Complete!",
+                resultDesc: "You've mastered the cosmos.",
+                yourScore: "Your Score",
+                highScore: "High Score",
+                btnRestart: "Play Again",
+                // Planets
+                mercury: "Mercury", venus: "Venus", earth: "Earth", mars: "Mars",
+                jupiter: "Jupiter", saturn: "Saturn", uranus: "Uranus", neptune: "Neptune",
+                // Constellations
+                orion: "Orion", ursa_major: "Ursa Major", scorpius: "Scorpius", cassiopeia: "Cassiopeia"
+            },
+            th: {
+                title: "ปริศนาดาราศาสตร์",
+                desc: "เรียนรู้ระบบสุริยะและกลุ่มดาวผ่านเกมอินเทอร์แอคทีฟสนุกๆ",
+                btnStart: "เริ่มเกม",
+                score: "คะแนน",
+                solarTitle: "จัดเรียงระบบสุริยะ",
+                solarInstruction: "ลากวาง (หรือแตะเลือกแล้วแตะวาง) ดาวเคราะห์ในวงโคจรให้ถูกต้องตามลำดับ",
+                sun: "ดวงอาทิตย์",
+                planetsPool: "ดาวเคราะห์",
+                btnNext: "ด่านต่อไป",
+                constTitle: "จับคู่กลุ่มดาว",
+                constInstruction: "ลากชื่อกลุ่มดาวไปวางให้ตรงกับภาพ",
+                namesPool: "ชื่อกลุ่มดาว",
+                btnFinish: "สรุปผลคะแนน",
+                resultTitle: "ภารกิจสำเร็จ!",
+                resultDesc: "คุณคือผู้เชี่ยวชาญด้านอวกาศ",
+                yourScore: "คะแนนของคุณ",
+                highScore: "คะแนนสูงสุด",
+                btnRestart: "เล่นอีกครั้ง",
+                // Planets
+                mercury: "พุธ", venus: "ศุกร์", earth: "โลก", mars: "อังคาร",
+                jupiter: "พฤหัสบดี", saturn: "เสาร์", uranus: "ยูเรนัส", neptune: "เนปจูน",
+                // Constellations
+                orion: "นายพราน", ursa_major: "หมีใหญ่", scorpius: "แมงป่อง", cassiopeia: "ค้างคาว"
+            }
+        };
+
+        // Planets Data
+        const planetsData = [
+            { id: 'p1', nameKey: 'mercury', class: 'planet-mercury', order: 1 },
+            { id: 'p2', nameKey: 'venus', class: 'planet-venus', order: 2 },
+            { id: 'p3', nameKey: 'earth', class: 'planet-earth', order: 3 },
+            { id: 'p4', nameKey: 'mars', class: 'planet-mars', order: 4 },
+            { id: 'p5', nameKey: 'jupiter', class: 'planet-jupiter', order: 5 },
+            { id: 'p6', nameKey: 'saturn', class: 'planet-saturn', order: 6 },
+            { id: 'p7', nameKey: 'uranus', class: 'planet-uranus', order: 7 },
+            { id: 'p8', nameKey: 'neptune', class: 'planet-neptune', order: 8 }
+        ];
+
+        // Constellations Data (Using SVG paths)
+        const constellationsData = [
+            { id: 'c1', nameKey: 'orion', 
+              svg: '<circle cx="30" cy="20" r="3" class="star-point"/><circle cx="70" cy="20" r="3" class="star-point"/><circle cx="50" cy="50" r="3" class="star-point"/><circle cx="30" cy="80" r="3" class="star-point"/><circle cx="70" cy="80" r="3" class="star-point"/><path d="M30 20 L70 20 L50 50 L30 80 L70 80 Z" />' },
+            { id: 'c2', nameKey: 'ursa_major', 
+              svg: '<circle cx="90" cy="20" r="3" class="star-point"/><circle cx="60" cy="40" r="3" class="star-point"/><circle cx="40" cy="40" r="3" class="star-point"/><circle cx="20" cy="50" r="3" class="star-point"/><circle cx="20" cy="80" r="3" class="star-point"/><circle cx="50" cy="70" r="3" class="star-point"/><circle cx="60" cy="40" r="3" class="star-point"/><path d="M90 20 L60 40 L40 40 L20 50 L20 80 L50 70 L60 40" />' },
+            { id: 'c3', nameKey: 'scorpius', 
+              svg: '<circle cx="80" cy="20" r="3" class="star-point"/><circle cx="60" cy="30" r="3" class="star-point"/><circle cx="50" cy="50" r="3" class="star-point"/><circle cx="40" cy="70" r="3" class="star-point"/><circle cx="20" cy="80" r="3" class="star-point"/><circle cx="20" cy="60" r="3" class="star-point"/><path d="M80 20 L60 30 L50 50 L40 70 L20 80 L20 60" />' },
+            { id: 'c4', nameKey: 'cassiopeia', 
+              svg: '<circle cx="10" cy="30" r="3" class="star-point"/><circle cx="30" cy="70" r="3" class="star-point"/><circle cx="50" cy="40" r="3" class="star-point"/><circle cx="70" cy="60" r="3" class="star-point"/><circle cx="90" cy="20" r="3" class="star-point"/><path d="M10 30 L30 70 L50 40 L70 60 L90 20" />' }
+        ];
+
+        // --- STREAMING_CHUNK:Initialization and UI setup... ---
+        
+        // Background Stars Setup
+        function createStars() {
+            const container = document.getElementById('stars-container');
+            for (let i = 0; i < 150; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = `${Math.random() * 100}vw`;
+                star.style.top = `${Math.random() * 100}vh`;
+                star.style.width = `${Math.random() * 3 + 1}px`;
+                star.style.height = star.style.width;
+                star.style.setProperty('--duration', `${Math.random() * 3 + 1}s`);
+                star.style.animationDelay = `${Math.random() * 2}s`;
+                container.appendChild(star);
+            }
+        }
+
+        // Language Handling
+        function setLanguage(lang) {
+            currentLang = lang;
+            
+            // Update buttons styling
+            const btnEn = document.getElementById('btn-lang-en');
+            const btnTh = document.getElementById('btn-lang-th');
+            
+            if(lang === 'en') {
+                btnEn.className = "px-6 py-2 rounded-full border-2 border-green-400 bg-green-400/20 font-bold transition";
+                btnTh.className = "px-6 py-2 rounded-full border-2 border-transparent bg-white/10 hover:bg-white/20 font-bold transition";
+            } else {
+                btnTh.className = "px-6 py-2 rounded-full border-2 border-green-400 bg-green-400/20 font-bold transition";
+                btnEn.className = "px-6 py-2 rounded-full border-2 border-transparent bg-white/10 hover:bg-white/20 font-bold transition";
+            }
+
+            updateTexts();
+        }
+
+        function updateTexts() {
+            // Update static texts
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[currentLang][key]) {
+                    el.textContent = dict[currentLang][key];
+                }
+            });
+
+            // Update dynamic planet/constellation names
+            document.querySelectorAll('[data-name-key]').forEach(el => {
+                const key = el.getAttribute('data-name-key');
+                if (dict[currentLang][key]) {
+                    // Prevent overwriting internal HTML if it has elements (like Saturn's ring pseudoclass, which is fine since text is direct node)
+                    // But for name tags, it's safe. For planets, safe too.
+                    el.textContent = dict[currentLang][key];
+                }
+            });
+        }
+
+        // Screen Navigation
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            if (screenId === 'screen-start') {
+                document.getElementById('game-header').classList.add('hidden');
+            } else {
+                document.getElementById('game-header').classList.remove('hidden');
+            }
+        }
+
+        // Add Floating Score Effect
+        function showFloatingScore(element, points) {
+            const rect = element.getBoundingClientRect();
+            const floatEl = document.createElement('div');
+            floatEl.className = 'floating-score';
+            floatEl.textContent = `+${points}`;
+            floatEl.style.left = `${rect.left + rect.width/2 - 20}px`;
+            floatEl.style.top = `${rect.top}px`;
+            document.body.appendChild(floatEl);
+            setTimeout(() => floatEl.remove(), 1000);
+        }
+
+        function addScore(points, element = null) {
+            score += points;
+            document.getElementById('current-score').textContent = score;
+            
+            // Pop effect on score counter
+            const scoreEl = document.getElementById('current-score');
+            scoreEl.style.transform = 'scale(1.5)';
+            scoreEl.style.color = '#fff';
+            setTimeout(() => {
+                scoreEl.style.transform = 'scale(1)';
+                scoreEl.style.color = '#4ade80';
+            }, 300);
+
+            if (element) {
+                showFloatingScore(element, points);
+            }
+        }
+
+        // Array Shuffle Helper
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        // --- STREAMING_CHUNK:Game 1 (Solar System) Logic... ---
+        let correctlyPlacedPlanets = 0;
+
+        function initSolarSystemGame() {
+            correctlyPlacedPlanets = 0;
+            const orbitsContainer = document.getElementById('orbits-container');
+            const planetsContainer = document.getElementById('planets-container');
+            
+            orbitsContainer.innerHTML = '';
+            planetsContainer.innerHTML = '';
+            document.getElementById('btn-next-solar').classList.add('hidden');
+
+            // Render Orbits
+            for(let i=1; i<=8; i++) {
+                const orbit = document.createElement('div');
+                orbit.className = 'drop-zone orbit-zone';
+                orbit.setAttribute('data-target-order', i);
+                
+                // Event Listeners for Drop
+                setupDropZone(orbit, (draggedEl) => {
+                    const order = parseInt(draggedEl.getAttribute('data-order'));
+                    if (order === i) {
+                        return true; // Match
+                    }
+                    return false; // Wrong
+                }, handleCorrectPlanetDrop);
+
+                orbitsContainer.appendChild(orbit);
+            }
+
+            // Render Planets
+            const shuffledPlanets = shuffle([...planetsData]);
+            shuffledPlanets.forEach(p => {
+                const planet = document.createElement('div');
+                planet.className = `planet ${p.class}`;
+                planet.setAttribute('draggable', 'true');
+                planet.setAttribute('data-id', p.id);
+                planet.setAttribute('data-order', p.order);
+                planet.setAttribute('data-name-key', p.nameKey);
+                planet.textContent = dict[currentLang][p.nameKey];
+                
+                setupDraggable(planet);
+                planetsContainer.appendChild(planet);
+            });
+        }
+
+        function handleCorrectPlanetDrop(zone, item) {
+            // Success Logic
+            zone.appendChild(item);
+            item.setAttribute('draggable', 'false');
+            item.style.cursor = 'default';
+            item.classList.remove('selected');
+            zone.classList.add('filled');
+            
+            // Remove specific event listeners to prevent dragging out
+            item.onmousedown = null; 
+            item.ontouchstart = null;
+
+            addScore(10, zone);
+            correctlyPlacedPlanets++;
+
+            if (correctlyPlacedPlanets === 8) {
+                document.getElementById('btn-next-solar').classList.remove('hidden');
+            }
+        }
+
+        // --- STREAMING_CHUNK:Game 2 (Constellations) Logic... ---
+        let correctlyPlacedConstellations = 0;
+
+        function initConstellationGame() {
+            correctlyPlacedConstellations = 0;
+            const constContainer = document.getElementById('constellations-container');
+            const namesContainer = document.getElementById('names-container');
+            
+            constContainer.innerHTML = '';
+            namesContainer.innerHTML = '';
+            document.getElementById('btn-finish').classList.add('hidden');
+
+            const shuffledConsts = shuffle([...constellationsData]);
+            
+            // Render Constellation Cards
+            shuffledConsts.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'constellation-card';
+                
+                const svgWrap = document.createElement('div');
+                svgWrap.innerHTML = `<svg viewBox="0 0 100 100" class="constellation-svg">${c.svg}</svg>`;
+                
+                const dropZone = document.createElement('div');
+                dropZone.className = 'drop-zone name-drop-zone';
+                dropZone.setAttribute('data-target-id', c.id);
+                
+                setupDropZone(dropZone, (draggedEl) => {
+                    return draggedEl.getAttribute('data-id') === c.id;
+                }, handleCorrectConstellationDrop);
+
+                card.appendChild(svgWrap);
+                card.appendChild(dropZone);
+                constContainer.appendChild(card);
+            });
+
+            // Render Name Tags
+            const shuffledNames = shuffle([...constellationsData]);
+            shuffledNames.forEach(n => {
+                const tag = document.createElement('div');
+                tag.className = 'name-tag';
+                tag.setAttribute('draggable', 'true');
+                tag.setAttribute('data-id', n.id);
+                tag.setAttribute('data-name-key', n.nameKey);
+                tag.textContent = dict[currentLang][n.nameKey];
+                
+                setupDraggable(tag);
+                namesContainer.appendChild(tag);
+            });
+        }
+
+        function handleCorrectConstellationDrop(zone, item) {
+            zone.appendChild(item);
+            item.setAttribute('draggable', 'false');
+            item.style.cursor = 'default';
+            item.classList.remove('selected');
+            zone.classList.add('filled');
+            zone.style.border = 'none'; // Clean look
+            
+            item.onmousedown = null;
+            item.ontouchstart = null;
+
+            addScore(10, zone);
+            correctlyPlacedConstellations++;
+
+            if (correctlyPlacedConstellations === 4) {
+                document.getElementById('btn-finish').classList.remove('hidden');
+            }
+        }
+
+        // --- STREAMING_CHUNK:Unified Drag and Drop (Mouse + Touch) System... ---
+        let draggedItem = null;
+
+        // Desktop HTML5 Drag Events
+        function setupDraggable(el) {
+            // HTML5 Drag
+            el.addEventListener('dragstart', (e) => {
+                draggedItem = el;
+                e.dataTransfer.setData('text/plain', el.dataset.id);
+                setTimeout(() => el.style.opacity = '0.5', 0);
+            });
+            el.addEventListener('dragend', () => {
+                el.style.opacity = '1';
+                draggedItem = null;
+            });
+
+            // Touch / Click (Tap to select, Tap to drop) - Mobile Friendly Alternative
+            el.addEventListener('click', (e) => {
+                if (el.getAttribute('draggable') === 'false') return;
+                
+                // Deselect previous
+                if (selectedElement && selectedElement !== el) {
+                    selectedElement.classList.remove('selected');
+                }
+                
+                // Toggle selection
+                if (selectedElement === el) {
+                    el.classList.remove('selected');
+                    selectedElement = null;
+                } else {
+                    el.classList.add('selected');
+                    selectedElement = el;
+                }
+            });
+        }
+
+        function setupDropZone(zone, validateFn, onSuccess) {
+            // HTML5 Drop
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if(zone.children.length === 0) {
+                    zone.classList.add('drag-over');
+                }
+            });
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('drag-over');
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                if (draggedItem && zone.children.length === 0) {
+                    processDrop(zone, draggedItem, validateFn, onSuccess);
+                }
+            });
+
+            // Touch / Click Drop logic
+            zone.addEventListener('click', () => {
+                if (selectedElement && zone.children.length === 0) {
+                    processDrop(zone, selectedElement, validateFn, onSuccess);
+                }
+            });
+        }
+
+        function processDrop(zone, item, validateFn, onSuccess) {
+            if (validateFn(item)) {
+                onSuccess(zone, item);
+                selectedElement = null; // Clear selection
+            } else {
+                // Wrong drop - visual feedback (shake)
+                item.animate([
+                    { transform: 'translateX(0px)' },
+                    { transform: 'translateX(-10px)' },
+                    { transform: 'translateX(10px)' },
+                    { transform: 'translateX(-10px)' },
+                    { transform: 'translateX(10px)' },
+                    { transform: 'translateX(0px)' }
+                ], { duration: 400, easing: 'ease-in-out' });
+                item.classList.remove('selected');
+                selectedElement = null;
+            }
+        }
+
+        // --- STREAMING_CHUNK:Game Flow Controllers... ---
+
+        function startGame() {
+            score = 0;
+            document.getElementById('current-score').textContent = score;
+            initSolarSystemGame();
+            showScreen('screen-solar');
+            updateTexts(); // ensure text is correct inside generated elements
+        }
+
+        function nextToConstellations() {
+            initConstellationGame();
+            showScreen('screen-constellation');
+            updateTexts();
+        }
+
+        function finishGame() {
+            showScreen('screen-result');
+            
+            // Handle LocalStorage High Score
+            const finalScoreEl = document.getElementById('final-score');
+            const highScoreEl = document.getElementById('high-score');
+            
+            finalScoreEl.textContent = score;
+            
+            let savedHighScore = parseInt(localStorage.getItem('astronomyHighScore') || '0');
+            
+            if (score > savedHighScore) {
+                savedHighScore = score;
+                localStorage.setItem('astronomyHighScore', savedHighScore);
+                // Highlight new high score
+                highScoreEl.classList.add('text-yellow-400');
+                highScoreEl.classList.remove('text-blue-400');
+            } else {
+                highScoreEl.classList.add('text-blue-400');
+                highScoreEl.classList.remove('text-yellow-400');
+            }
+            
+            highScoreEl.textContent = savedHighScore;
+        }
+
+        function resetGame() {
+            showScreen('screen-start');
+        }
+
+        // Global Lang Toggle for in-game
+        document.getElementById('lang-toggle-game').addEventListener('click', () => {
+            const newLang = currentLang === 'en' ? 'th' : 'en';
+            setLanguage(newLang);
+        });
+
+        // Initialize on load
+        window.onload = () => {
+            createStars();
+            updateTexts();
+        };
+
+    </script>
+</body>
+</html>
